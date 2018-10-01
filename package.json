@@ -1,6 +1,6 @@
 {
   "name": "validate-ldap-users",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Flag users from Slack & GitHub that may no longer be with a company",
   "license": "MIT",
   "author": "Scott Williams",
@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@octokit/rest": "^15.12.1",
+    "@slack/client": "^4.6.0",
     "ldapjs": "^1.0.2",
-    "rc": "^1.2.8",
-    "slack-node": "^0.1.8"
+    "rc": "^1.2.8"
   }
 }
