@@ -18,6 +18,6 @@ validate-ldap-users \
 --slackToken=token
 ```
 
-###Argument details###
+### Argument details ###
 * [How to get a GitHub personal access token](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/)
 * [How to get a Slack API token](https://get.slack.help/hc/en-us/articles/215770388-Create-and-regenerate-API-tokens)
