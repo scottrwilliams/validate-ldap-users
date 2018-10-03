@@ -1,7 +1,6 @@
 'use strict';
 
 const ldap = require('ldapjs'),
-  rc = require('rc'),
   GitHubApi = require('@octokit/rest'),
   Slack = require('@slack/client');
 
@@ -103,13 +102,13 @@ async function fetchSlackUsers(slackToken) {
   return list.members.filter(member => !member.deleted);
 }
 
-module.exports.validate = async () => {
-  const conf = rc('thirdPartyChecker');
-  const results = await searchLDAP(conf.ldapUser, conf.ldapPassword, conf.ldapUrl, conf.ldapBaseSearch, conf.email);
+module.exports.validate = async (ldapUser, ldapPassword, ldapUrl, ldapBaseSearch, email,
+  githubToken, githubOrg, slackToken) => {
+  const results = await searchLDAP(ldapUser, ldapPassword, ldapUrl, ldapBaseSearch, email);
   console.log(`Found ${results.numLdapUsers} users in LDAP`);
 
-  if (conf.githubToken && conf.githubOrg) {
-    const githubUsers = await fetchGitHubUsers(conf.githubToken, conf.githubOrg);
+  if (githubToken && githubOrg) {
+    const githubUsers = await fetchGitHubUsers(githubToken, githubOrg);
     console.log('----- GitHub Users -----');
     let numNotFoundGithub = 0;
     for (const {
@@ -133,8 +132,8 @@ module.exports.validate = async () => {
     console.log(`Could not find ${numNotFoundGithub} of ${githubUsers.length} Github users`);
   }
 
-  if (conf.slackToken) {
-    const slackUsers = await fetchSlackUsers(conf.slackToken);
+  if (slackToken) {
+    const slackUsers = await fetchSlackUsers(slackToken);
     console.log('----- Slack Users -----');
     let numNotFoundSlack = 0;
     let bots = [];

@@ -1,17 +1,21 @@
 {
   "name": "validate-ldap-users",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Flag users from Slack & GitHub that may no longer be with a company",
   "license": "MIT",
   "author": "Scott Williams",
   "main": "validate.js",
+  "bin": "./start.js",
   "scripts": {
-    "start": "node start.js"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@octokit/rest": "^15.12.1",
-    "@slack/client": "^4.6.0",
+    "@slack/client": "^4.7.0",
     "ldapjs": "^1.0.2",
     "rc": "^1.2.8"
+  },
+  "devDependencies": {
+    "eslint": "^5.6.1"
   }
 }
