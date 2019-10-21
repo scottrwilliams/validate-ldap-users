@@ -11,11 +11,8 @@ const {
   ldapPassword,
   ldapUrl,
   ldapBaseSearch,
-  email,
   githubToken,
-  githubOrg,
-  slackToken
+  githubOrgs
 } = conf;
 
-validateLdapUsers.validate(ldapUser, ldapPassword, ldapUrl, ldapBaseSearch, email,
-  githubToken, githubOrg, slackToken);
+validateLdapUsers.validate(ldapUser, ldapPassword, ldapUrl, ldapBaseSearch, githubToken, githubOrgs);

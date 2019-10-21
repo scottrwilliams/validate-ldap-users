@@ -1,15 +1,7 @@
 'use strict';
 
 const ldap = require('ldapjs'),
-  GitHubApi = require('@octokit/rest'),
-  Slack = require('@slack/client');
-
-function sanatizeEmail(name) {
-  return name
-    .substring(0, name.lastIndexOf('@'))
-    .replace(/[^\w.-]+/g, '')
-    .toLowerCase();
-}
+  GitHubApi = require('@octokit/rest');
 
 function sanatizeName(name) {
   let cleanName = name.trim().toLowerCase();
@@ -21,7 +13,7 @@ function sanatizeName(name) {
   return cleanName;
 }
 
-function searchLDAP(ldapUser, ldapPassword, url, ldapBaseSearch, email) {
+function searchLDAP(ldapUser, ldapPassword, url, ldapBaseSearch) {
   return new Promise(resolve => {
     const client = ldap.createClient({
       url
@@ -30,11 +22,12 @@ function searchLDAP(ldapUser, ldapPassword, url, ldapBaseSearch, email) {
     const opts = {
       filter: '(&(objectclass=person)(company=*))',
       scope: 'sub',
-      attributes: ['sAMAccountName', 'mail', 'name', 'givenName', 'sn', 'distinguishedName']
+      attributes: ['sAMAccountName', 'name', 'givenName', 'sn', 'distinguishedName']
     };
 
     client.bind(ldapUser, ldapPassword, () => {
       const ldapUserLookup = new Set();
+      const ldapUserNameLookup = new Set();
       let numLdapUsers = 0;
       client.search(
         ldapBaseSearch,
@@ -44,12 +37,7 @@ function searchLDAP(ldapUser, ldapPassword, url, ldapBaseSearch, email) {
             const ldapEntry = entry.object;
             if (!/restricted|_hold|test/.test(ldapEntry.distinguishedName.toLowerCase())) {
               ldapUserLookup.add(sanatizeName(ldapEntry.name));
-              ldapUserLookup.add(ldapEntry.sAMAccountName.toLowerCase());
-              if (ldapEntry.mail) {
-                ldapUserLookup.add(sanatizeEmail(ldapEntry.mail));
-              }
-              const emailFromName = `${ldapEntry.givenName}.${ldapEntry.sn}@${email}`;
-              ldapUserLookup.add(sanatizeEmail(emailFromName));
+              ldapUserNameLookup.add(ldapEntry.sAMAccountName.toLowerCase());
               numLdapUsers++;
             }
           });
@@ -57,6 +45,7 @@ function searchLDAP(ldapUser, ldapPassword, url, ldapBaseSearch, email) {
             client.unbind();
             resolve({
               ldapUserLookup,
+              ldapUserNameLookup,
               numLdapUsers
             });
           });
@@ -67,28 +56,20 @@ function searchLDAP(ldapUser, ldapPassword, url, ldapBaseSearch, email) {
 }
 
 async function fetchGitHubUsers(token, org) {
-  const github = new GitHubApi();
-  github.authenticate({
-    type: 'oauth',
-    token
+  const github = new GitHubApi({
+    auth: token
   });
 
-  let response = await github.orgs.getMembers({
-    org,
-    per_page: 100
-  });
-  let members = response.data;
-  while (github.hasNextPage(response)) {
-    response = await github.getNextPage(response);
-    members = members.concat(response.data);
-  }
-
+  let members = await github.paginate(
+    github.orgs.listMembers.endpoint.merge({
+      org
+    })
+  );
   //chunk fetching details to avoid https://developer.github.com/v3/#abuse-rate-limits
   let gitHubUsers = [];
   while (members.length) {
-
     const chunks = await Promise.all(
-      members.splice(0, 50).map(member => github.users.getForUser({
+      members.splice(0, 50).map(member => github.users.getByUsername({
         username: member.login
       })));
     gitHubUsers = gitHubUsers.concat(chunks.map(user => user.data));
@@ -96,20 +77,15 @@ async function fetchGitHubUsers(token, org) {
   return gitHubUsers;
 }
 
-async function fetchSlackUsers(slackToken) {
-  const slack = new Slack.WebClient(slackToken);
-  const list = await slack.users.list();
-  return list.members.filter(member => !member.deleted);
-}
+module.exports.validate = async (ldapUser, ldapPassword, ldapUrl, ldapBaseSearch,
+  githubToken, githubOrgs) => {
+  const results = await searchLDAP(ldapUser, ldapPassword, ldapUrl, ldapBaseSearch);
+  console.log(`\nFound ${results.numLdapUsers} users in LDAP`);
 
-module.exports.validate = async (ldapUser, ldapPassword, ldapUrl, ldapBaseSearch, email,
-  githubToken, githubOrg, slackToken) => {
-  const results = await searchLDAP(ldapUser, ldapPassword, ldapUrl, ldapBaseSearch, email);
-  console.log(`Found ${results.numLdapUsers} users in LDAP`);
-
-  if (githubToken && githubOrg) {
+  for (const githubOrg of githubOrgs.split(',')) {
     const githubUsers = await fetchGitHubUsers(githubToken, githubOrg);
-    console.log('----- GitHub Users -----');
+
+    console.log(`\n----- GitHub Users: ${githubOrg} -----`);
     let numNotFoundGithub = 0;
     for (const {
         name,
@@ -122,7 +98,7 @@ module.exports.validate = async (ldapUser, ldapPassword, ldapUrl, ldapBaseSearch
         const names = name.split(' ');
         const username = names.length === 2 ? (names[0][0] + names[1]).toLowerCase() : '';
         let warning = `Cannot find ${login} (${name})`;
-        if (!results.ldapUserLookup.has(username)) {
+        if (!results.ldapUserNameLookup.has(username)) {
           warning += ' **********';
         }
         console.log(warning);
@@ -130,39 +106,5 @@ module.exports.validate = async (ldapUser, ldapPassword, ldapUrl, ldapBaseSearch
       }
     }
     console.log(`Could not find ${numNotFoundGithub} of ${githubUsers.length} Github users`);
-  }
-
-  if (slackToken) {
-    const slackUsers = await fetchSlackUsers(slackToken);
-    console.log('----- Slack Users -----');
-    let numNotFoundSlack = 0;
-    let bots = [];
-    for (const {
-        is_bot,
-        name,
-        profile: {
-          email,
-          guest_channels
-        }
-      } of slackUsers) {
-      if (is_bot) {
-        bots.push(name);
-      } else if (!email) {
-        console.log(`${name} does not have an email address`);
-        numNotFoundSlack++;
-      } else {
-        const emailName = sanatizeEmail(email);
-        if (!results.ldapUserLookup.has(emailName)) {
-          if (guest_channels) {
-            console.log(`Could not find GUEST ${name} (${email})`);
-          } else {
-            console.log(`Could not find ${name} (${email})`);
-          }
-          numNotFoundSlack++;
-        }
-      }
-    }
-    console.log(`Could not find ${numNotFoundSlack} of ${slackUsers.length} Slack users`);
-    console.log('Bots: ' + bots)
   }
 }

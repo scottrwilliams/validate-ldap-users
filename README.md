@@ -1,5 +1,5 @@
 # validate-ldap-users
-Report on users with Slack or GitHub accounts within an organization that may no longer be with the company
+Report on users with GitHub accounts within an organization that may no longer be with the company
 
 ## Quick start
 
@@ -12,12 +12,9 @@ validate-ldap-users \
 --ldapUser=user \
 --ldapPassword=pass \
 --ldapBaseSearch=OU=Users,DC=domain,DC=local \
---email=company.com \
---githubOrg=company \
---githubToken=token \
---slackToken=token
+--githubOrgs=org1,org2 \
+--githubToken=token
 ```
 
-### Argument details ###
+## Argument details
 * [How to get a GitHub personal access token](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/)
-* [How to get a Slack API token](https://get.slack.help/hc/en-us/articles/215770388-Create-and-regenerate-API-tokens)
