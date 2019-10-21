@@ -16,5 +16,5 @@ validate-ldap-users \
 --githubToken=token
 ```
 
-## Argument details ##
+## Argument details
 * [How to get a GitHub personal access token](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/)
